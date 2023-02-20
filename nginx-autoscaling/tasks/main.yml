@@ -1,0 +1,65 @@
+---
+- name: Create EC2 Key Pair
+  ec2_key:
+    name: "{{ keypair_name }}"
+    region: "{{ region }}"
+  register: ec2_keypair
+  
+- name: Create the security group
+  ec2_group:
+    name: "{{ security_group_name }}"
+    description: "Allow HTTPS traffic"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        from_port: 443
+        to_port: 443
+        cidr_ip: 0.0.0.0/0
+      - proto: tcp
+        from_port: 80
+        to_port: 80
+        cidr_ip: 0.0.0.0/0
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 49.206.39.94/32
+
+- name: Create Launch Configuration
+  ec2_lc:
+    name: "{{ lc_name }}"
+    image_id: "{{ image_id }}"
+    key_name: "{{ keypair_name }}"
+    instance_type: "{{ instance_type }}"
+    region: "{{ region }}"
+    security_groups: "{{ security_group_name }}"
+    user_data: |
+      #!/bin/bash
+      apt-get update -y
+      apt-get install nginx -y
+      echo '{{ nginx_custom_page }}' > /usr/share/nginx/html/index.html
+      sudo mkdir /etc/nginx/certs
+      sudo chmod -R 755 /etc/nginx/certs
+      openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/certs/server.key -out /etc/nginx/certs/server.crt -subj "/C=US/ST=California/L=San Francisco/O=My Company/OU=IT Department/CN=*.compute-1.amazonaws.com"
+      sed -i "s|listen\s*80|listen 443 ssl|g" /etc/nginx/sites-available/default
+      sed -i "/listen 443 ssl/a ssl_certificate_key \/etc\/nginx\/certs\/server.key;" /etc/nginx/sites-available/default
+      sed -i "/listen 443 ssl/a ssl_certificate \/etc\/nginx\/certs\/server.crt;" /etc/nginx/sites-available/default
+      sed -i "s#root /var/www/html;#root /usr/share/nginx/html;#g" /etc/nginx/sites-available/default
+      sudo service nginx reload
+      sudo service nginx restart
+  register: launch_config
+
+- name: Create the auto scaling group
+  ec2_asg:
+    name: "{{ auto_scaling_group_name }}"
+    launch_config_name: "{{ lc_name }}"
+    region: "{{ region }}"
+    desired_capacity: "{{ desired_capacity }}"
+    min_size: "{{ min_size }}"
+    max_size: "{{ max_size }}"
+    availability_zones: "{{ availability_zones }}"
+    tags:
+      - key: Name
+        value: "{{ auto_scaling_group_name }}"
+    wait_for_instances: yes
+    health_check_type: EC2
+  register: ec2

@@ -1,0 +1,18 @@
+---
+# Role Variables
+region: us-east-1
+vpc_id: vpc-05a9ba5a79c8d81f1
+security_group_name: sed-security-group
+keypair_name: sed-keypair
+keypair_file: "{{ playbook_dir }}/files/my-keypair.pem"
+instance_type: t2.medium
+image_id: ami-09cd747c78a9add63
+min_size: 1
+max_size: 3
+desired_capacity: 1
+lc_name: sed-launch-config
+auto_scaling_group_name: sed-auto-scaling-group
+nginx_custom_page: "<html><head><title>Hello World</title></head><body><h1>Hello World!</h1></body></html>"
+availability_zones:
+  - us-east-1a
+  - us-east-1b
